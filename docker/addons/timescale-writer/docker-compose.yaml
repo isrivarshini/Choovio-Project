@@ -25,7 +25,7 @@ services:
       POSTGRES_USER: ${MG_TIMESCALE_USER}
       POSTGRES_DB: ${MG_TIMESCALE_NAME}
     ports:
-      - 5433:5432
+      - 5434:5433
     networks:
       - magistrala-base-net
     volumes:
