@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Smartphone, Key, Eye, EyeOff, Copy, Wifi, Battery, Search } from 'lucide-react';
+import { Plus, Smartphone, Key, Eye, EyeOff, Copy, Wifi, Battery, Search, Trash2 } from 'lucide-react';
 import { things } from '../api/api';
 import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -11,7 +11,9 @@ const Devices = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState(null);
+  const [deviceToDelete, setDeviceToDelete] = useState(null);
   const [showKey, setShowKey] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
@@ -53,6 +55,32 @@ const Devices = () => {
     setSelectedDevice(device);
     setShowKey(false);
     setIsKeyModalOpen(true);
+  };
+
+  const handleDeleteDevice = (device) => {
+    setDeviceToDelete(device);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deviceToDelete) return;
+    
+    setFormLoading(true);
+    try {
+      const result = await things.delete(deviceToDelete.id);
+      if (result.success) {
+        showSuccess('Device deleted successfully');
+        setIsDeleteModalOpen(false);
+        setDeviceToDelete(null);
+        fetchDevices();
+      } else {
+        showError(result.error || 'Failed to delete device');
+      }
+    } catch (error) {
+      showError('An error occurred while deleting device');
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -224,17 +252,28 @@ const Devices = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                    <span className="text-xs text-gray-500">
-                      Created: {device.created_at ? new Date(device.created_at).toLocaleDateString() : 'N/A'}
-                    </span>
-                    <button
-                      onClick={() => handleViewKey(device)}
-                      className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                    >
-                      <Key className="w-4 h-4" />
-                      <span>View Key</span>
-                    </button>
+                  <div className="pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500">
+                        Created: {device.created_at ? new Date(device.created_at).toLocaleDateString() : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between space-x-2">
+                      <button
+                        onClick={() => handleViewKey(device)}
+                        className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                      >
+                        <Key className="w-4 h-4" />
+                        <span>View Key</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDevice(device)}
+                        className="flex items-center space-x-1 text-red-600 hover:text-red-700 text-sm font-medium hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -381,6 +420,58 @@ const Devices = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Device"
+        size="medium"
+      >
+        {deviceToDelete && (
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-red-900">Confirm Device Deletion</h4>
+                  <p className="text-sm text-red-700 mt-1">
+                    This action cannot be undone. The device will be permanently removed from the system.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">You are about to delete:</p>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="font-medium text-gray-900">{deviceToDelete.name || 'Unnamed Device'}</p>
+                <p className="text-sm text-gray-500">ID: {deviceToDelete.id}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={formLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+              >
+                {formLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                <span>Delete Device</span>
               </button>
             </div>
           </div>
