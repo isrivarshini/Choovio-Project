@@ -220,46 +220,46 @@ rundev:
 grpc_mtls_certs:
 	$(MAKE) -C docker/ssl auth_grpc_certs things_grpc_certs
 
-check_tls:
+check_tls:	
 ifeq ($(GRPC_TLS),true)
-	@unset GRPC_MTLS
 	@echo "gRPC TLS is enabled"
 	GRPC_MTLS=
 else
-	@unset GRPC_TLS
 	GRPC_TLS=
 endif
 
 check_mtls:
 ifeq ($(GRPC_MTLS),true)
-	@unset GRPC_TLS
-	@echo "gRPC MTLS is enabled"
-	GRPC_TLS=
+	@echo "GRPC_MTLS is set to true"
+	@echo "gRPC TLS is disabled"
+    GRPC_TLS=
 else
-	@unset GRPC_MTLS
+	@echo "GRPC_MTLS is not set to true"
 	GRPC_MTLS=
 endif
 
 check_certs: check_mtls check_tls
 ifeq ($(GRPC_MTLS_CERT_FILES_EXISTS),0)
-ifeq ($(filter true,$(GRPC_MTLS) $(GRPC_TLS)),true)
-ifeq ($(filter $(DEFAULT_DOCKER_COMPOSE_COMMAND),$(DOCKER_COMPOSE_COMMAND)),$(DEFAULT_DOCKER_COMPOSE_COMMAND))
-	$(MAKE) -C docker/ssl auth_grpc_certs things_grpc_certs
-endif
-endif
+    ifeq ($(filter true,$(GRPC_MTLS) $(GRPC_TLS)),true)
+        # Commented out the docker/ssl command
+        #ifeq ($(filter $(DEFAULT_DOCKER_COMPOSE_COMMAND),$(DOCKER_COMPOSE_COMMAND)),$(DEFAULT_DOCKER_COMPOSE_COMMAND))
+        #    $(MAKE) -C docker/ssl auth_grpc_certs things_grpc_certs
+        #endif
+    endif
 endif
 
 fetch_supermq:
 	@./scripts/supermq.sh
 
  run: check_certs
-	MG_ADDONS_CERTS_PATH_PREFIX="../." docker compose -f docker/docker-compose.yaml \
-		-f docker/addons/timescale-reader/docker-compose.yaml \
-		-f docker/addons/timescale-writer/docker-compose.yaml \
-		--env-file docker/.env -p $(DOCKER_PROJECT) $(DOCKER_COMPOSE_COMMAND) $(args)
+	MG_ADDONS_CERTS_PATH_PREFIX="../." docker compose -f ../docker/docker-compose.yaml \
+		-f ../docker/addons/timescale-reader/docker-compose.yaml \
+		-f ../docker/addons/timescale-writer/docker-compose.yaml \
+		--env-file ../docker/.env -p $(DOCKER_PROJECT) $(DOCKER_COMPOSE_COMMAND) $(args)
 
 run_addons: check_certs
 	$(foreach SVC,$(RUN_ADDON_ARGS),$(if $(filter $(SVC),$(ADDON_SERVICES) $(EXTERNAL_SERVICES)),,$(error Invalid Service $(SVC))))
 	@for SVC in $(RUN_ADDON_ARGS); do \
-		MG_ADDONS_CERTS_PATH_PREFIX="../."  docker compose -f docker/addons/$$SVC/docker-compose.yaml -p $(DOCKER_PROJECT) --env-file ./docker/.env $(DOCKER_COMPOSE_COMMAND) $(args) & \
+		MG_ADDONS_CERTS_PATH_PREFIX="../." docker compose -f ../docker/docker-compose.yaml \
+			-f docker/addons/$$SVC/docker-compose.yaml -p $(DOCKER_PROJECT) --env-file ../docker/.env $(DOCKER_COMPOSE_COMMAND) $(args) & \
 	done
