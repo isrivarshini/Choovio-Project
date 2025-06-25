@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // Base configuration for Magistrala API
-const BASE_URL = ''; // Default Magistrala API endpoint
+const BASE_URL = 'http://localhost:9000'; // For API calls
+const WEBSOCKET_URL = 'ws://localhost:9000/ws'; // For WebSocket connection
 
 // Create axios instance with default config
 const api = axios.create({
@@ -46,7 +47,11 @@ api.interceptors.response.use(
 export const auth = {
   login: async (email, password) => {
     try {
-      // Always try real API call
+      // Use default credentials if none are provided
+      if (!email || !password) {
+        email = 'admin@example.com'; // Default email
+        password = 'admin123'; // Default password
+      }
       const response = await api.post('/tokens', { email, password });
       const token = response.data.access_token;
       authToken = token;
@@ -54,18 +59,13 @@ export const auth = {
       return { success: true, token };
     } catch (error) {
       console.error('Login error:', error);
-      // Provide detailed error information
       let errorMessage = 'Login failed';
       if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
         errorMessage = 'Cannot connect to Magistrala server. Please check if the server is running on localhost:9000';
-      } else if (error.response?.status === 401) {
-        errorMessage = 'Invalid email or password';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Magistrala API endpoint not found. Please check server configuration.';
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
+      } else if (error.response) {
+        errorMessage = error.response.data.message || 'An error occurred';
+      } else {
+        errorMessage = error.message || 'An unknown error occurred';
       }
       return { 
         success: false, 
