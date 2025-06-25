@@ -63,11 +63,15 @@ const Login = () => {
         <div className="bg-white rounded-2xl shadow-xl p-8">
           {/* Logo and Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-white font-bold text-2xl">M</span>
+            <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+              <img 
+                src="/assets/logo1.webp" 
+                alt="Choovio Logo" 
+                className="w-16 h-16 object-contain"
+              />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-            <p className="text-gray-600">Sign in to your Magistrala Admin account</p>
+            <p className="text-gray-600">Sign in to your Choovio's Admin account</p>
           </div>
 
           {/* Connection Info */}
@@ -162,8 +166,8 @@ const Login = () => {
               <div>
                 <h4 className="text-sm font-medium text-blue-900">Demo Mode</h4>
                 <p className="text-sm text-blue-700 mt-1">
-                  This dashboard works in demo mode with mock data. To connect to a real Magistrala instance, 
-                  update the BASE_URL in src/api/api.js and ensure your Magistrala server is running.
+                  This dashboard works in demo mode with mock data. To connect to a real Choovio instance, 
+                  update the BASE_URL in src/api/api.js and ensure your Choovio server is running.
                 </p>
               </div>
             </div>

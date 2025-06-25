@@ -10,7 +10,7 @@ import {
   Battery,
   RefreshCw
 } from 'lucide-react';
-import { users, things, channels, health } from '../api/api';
+import { users, things, channels, health, auth } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const Dashboard = () => {
@@ -22,6 +22,10 @@ const Dashboard = () => {
   });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [devices, setDevices] = useState([]);
+  const [loginStatus, setLoginStatus] = useState('Not logged in');
+  const [wsStatus, setWsStatus] = useState('Disconnected');
+  const [socket, setSocket] = useState(null);
 
   const fetchStats = async () => {
     setIsRefreshing(true);
@@ -91,9 +95,114 @@ const Dashboard = () => {
     setIsRefreshing(false);
   };
 
+  // Test login on component mount
   useEffect(() => {
-    fetchStats();
+    testLogin();
   }, []);
+
+  // Test login function
+  const testLogin = async () => {
+    setLoginStatus('Attempting login...');
+    try {
+      const result = await auth.login('admin@example.com', 'admin123');
+      if (result.success) {
+        setLoginStatus('✅ Login successful!');
+        // After successful login, connect to WebSocket
+        connectWebSocket();
+      } else {
+        setLoginStatus(`❌ Login failed: ${result.error}`);
+      }
+    } catch (error) {
+      setLoginStatus(`❌ Login error: ${error.message}`);
+    }
+  };
+
+  // Connect to WebSocket
+  const connectWebSocket = () => {
+    // Close existing connection if any
+    if (socket) {
+      socket.close();
+    }
+
+    try {
+      setWsStatus('Connecting...');
+      const ws = new WebSocket('ws://localhost:9000/ws');
+      
+      // Set a connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+          setWsStatus('❌ Connection timeout');
+        }
+      }, 10000); // 10 seconds timeout
+
+      ws.onopen = () => {
+        clearTimeout(connectionTimeout);
+        setWsStatus('✅ WebSocket connected!');
+        console.log('WebSocket connected successfully');
+      };
+
+      ws.onmessage = (event) => {
+        console.log('Received WebSocket message:', event.data);
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Handle the new message format from backend
+          if (data.type === 'device_update' && data.devices) {
+            setDevices(data.devices);
+            console.log(`Updated devices: ${data.count} devices at ${data.timestamp}`);
+          } else if (Array.isArray(data)) {
+            // Fallback for old format
+            setDevices(data);
+          } else {
+            console.log('Received unknown message format:', data);
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        clearTimeout(connectionTimeout);
+        setWsStatus('❌ WebSocket error');
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = (event) => {
+        clearTimeout(connectionTimeout);
+        setWsStatus('❌ WebSocket disconnected');
+        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
+        
+        // Attempt to reconnect after 5 seconds if it wasn't a manual close
+        if (event.code !== 1000) {
+          setTimeout(() => {
+            console.log('Attempting to reconnect WebSocket...');
+            connectWebSocket();
+          }, 5000);
+        }
+      };
+
+      setSocket(ws);
+    } catch (error) {
+      setWsStatus(`❌ WebSocket connection failed: ${error.message}`);
+      console.error('WebSocket connection failed:', error);
+      
+      // Retry connection after 5 seconds
+      setTimeout(() => {
+        console.log('Retrying WebSocket connection...');
+        connectWebSocket();
+      }, 5000);
+    }
+  };
+
+  // Cleanup WebSocket on component unmount
+  useEffect(() => {
+    return () => {
+      if (socket) {
+        socket.close();
+      }
+    };
+  }, [socket]);
 
   const StatCard = ({ title, value, icon: Icon, loading, trend, trendValue, color = 'blue' }) => {
     const colorClasses = {
@@ -164,7 +273,7 @@ const Dashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Welcome to your Magistrala admin dashboard</p>
+          <p className="text-gray-600 mt-1">Welcome to your Choovio's admin dashboard</p>
         </div>
         <button
           onClick={fetchStats}
@@ -297,6 +406,47 @@ const Dashboard = () => {
               <TrendingUp className="w-8 h-8 text-green-500" />
             </div>
           </div>
+        </div>
+      </div>
+
+      <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+        <h1>🔗 Frontend-Backend Connection Test</h1>
+        
+        <div style={{ marginBottom: '20px' }}>
+          <h3>📡 Connection Status</h3>
+          <p><strong>Login Status:</strong> {loginStatus}</p>
+          <p><strong>WebSocket Status:</strong> {wsStatus}</p>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <button onClick={testLogin} style={{ padding: '10px 20px', marginRight: '10px' }}>
+            Test Login
+          </button>
+          <button onClick={connectWebSocket} style={{ padding: '10px 20px' }}>
+            Connect WebSocket
+          </button>
+        </div>
+
+        <div>
+          <h3>📱 Real-time Devices ({devices.length})</h3>
+          {devices.length > 0 ? (
+            <ul>
+              {devices.map(device => (
+                <li key={device.id}>
+                  <strong>{device.name}</strong> - {device.type} (ID: {device.id})
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No devices received yet. WebSocket should update this every 5 seconds.</p>
+          )}
+        </div>
+
+        <div style={{ marginTop: '30px', padding: '10px', backgroundColor: '#f0f0f0' }}>
+          <h4>🛠 Debug Info</h4>
+          <p><strong>API Base URL:</strong> http://localhost:9000</p>
+          <p><strong>WebSocket URL:</strong> ws://localhost:9000/ws</p>
+          <p><strong>Current Time:</strong> {new Date().toLocaleTimeString()}</p>
         </div>
       </div>
     </div>

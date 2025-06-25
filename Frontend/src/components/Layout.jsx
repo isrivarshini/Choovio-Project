@@ -38,10 +38,12 @@ const Layout = () => {
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                <span className="text-blue-600 font-bold text-lg">M</span>
-              </div>
-              <h1 className="text-xl font-bold">Magistrala Admin</h1>
+              <img 
+                src="/assets/logo.webp" 
+                alt="Choovio Logo" 
+                className="w-13 h-10 object-contain"
+              />
+              <h1 className="text-xl font-bold">Dashboard</h1>
             </div>
             
             <div className="hidden md:flex items-center space-x-2 ml-8">
