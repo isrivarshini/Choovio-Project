@@ -1,0 +1,39 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "email": "admin@example.com",
+      "name": "Admin User",
+      "password": "admin123",
+      "created_at": "2025-06-25T12:22:15.102819-04:00"
+    },
+    {
+      "id": "2",
+      "email": "user@example.com",
+      "name": "Regular User",
+      "password": "password123",
+      "created_at": "2025-06-25T12:22:15.102819-04:00"
+    },
+    {
+      "id": "3",
+      "email": "test@example.com",
+      "name": "Test User",
+      "password": "testpass123",
+      "created_at": "2025-06-25T12:27:22.920343-04:00"
+    },
+    {
+      "id": "4",
+      "email": "inakollusri751@gmail.com",
+      "name": "Sri Varshini Inakollu Updated",
+      "password": "mynewpassword123",
+      "created_at": "2025-06-25T12:27:59.160999-04:00"
+    },
+    {
+      "id": "5",
+      "email": "john@test.com",
+      "name": "John Doe",
+      "password": "john123",
+      "created_at": "2025-06-25T12:28:38.28957-04:00"
+    }
+  ]
+}
