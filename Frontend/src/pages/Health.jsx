@@ -79,7 +79,7 @@ const Health = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">System Health</h1>
-          <p className="text-gray-600 mt-1">Monitor the health of all Magistrala services</p>
+          <p className="text-gray-600 mt-1">Monitor the health of all Choovio services</p>
         </div>
         <button
           onClick={checkSystemHealth}
