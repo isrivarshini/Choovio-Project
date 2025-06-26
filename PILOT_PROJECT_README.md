@@ -98,11 +98,11 @@ magistrala/
 │   │   ├── api/               # API integration layer
 │   │   └── ...
 │   └── public/assets/         # Choovio branding assets
-├── backend/                    # Enhanced backend services
+├── Backend/                    # Enhanced backend services
 │   ├── api/                   # Custom API endpoints
 │   ├── cmd/                   # Application entry points
 │   └── data/                  # Sample data for development
-└── docker/                    # Container configurations
+└── Docker/                    # Container configurations
 ```
 
 ## 🎯 Key Features Implemented
@@ -135,7 +135,7 @@ magistrala/
 ### Quick Start
 ```bash
 # 1. Start Magistrala services
-cd docker
+cd Docker
 docker-compose up -d
 
 # 2. Start Frontend (separate terminal)

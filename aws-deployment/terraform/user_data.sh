@@ -104,7 +104,7 @@ User=ec2-user
 WorkingDirectory=/opt/choovio/backend
 Environment=PATH=/usr/local/go/bin:/usr/bin:/bin
 EnvironmentFile=/opt/choovio/.env
-ExecStart=/opt/choovio/backend/magistrala-api
+ExecStart=/opt/choovio/Backend/magistrala-api
 Restart=always
 RestartSec=10
 
@@ -229,7 +229,7 @@ echo "2. Frontend Status:"
 curl -s http://localhost:5173 > /dev/null && echo "Frontend is UP" || echo "Frontend is DOWN"
 
 echo "3. Docker Services:"
-docker-compose -f /opt/choovio/docker/docker-compose.yml ps
+docker-compose -f /opt/choovio/Docker/docker-compose.yml ps
 
 echo "4. System Resources:"
 free -h

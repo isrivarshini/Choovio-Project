@@ -1,5 +1,5 @@
 # Project Structure
 
-- backend/: Magistrala backend (Go)
+- Backend/: Magistrala backend (Go)
 - frontend/: Frontend (React/Vite/etc.)
 
