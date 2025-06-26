@@ -155,7 +155,10 @@ const Login = () => {
             <h3 className="text-sm font-medium text-gray-700 mb-2">Demo Credentials</h3>
             <div className="text-xs text-gray-600 space-y-1">
               <p><strong>Email:</strong> admin@example.com</p>
-              <p><strong>Password:</strong> admin123</p>
+              <p><strong>Password:</strong> 12345678</p>
+              <div className="mt-2 p-2 bg-blue-100 border border-blue-300 rounded text-blue-800 text-sm">
+                <p><strong>🎯 Demo Mode:</strong> This platform runs in demo mode with local data storage. All changes are saved locally and will persist between sessions.</p>
+              </div>
             </div>
           </div>
 

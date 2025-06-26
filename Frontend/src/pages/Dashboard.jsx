@@ -305,7 +305,7 @@ const Dashboard = () => {
           icon={Users}
           loading={stats.users.loading}
           trend="up"
-          trendValue="12"
+          trendValue="0"
           color="blue"
         />
         <StatCard
@@ -314,7 +314,7 @@ const Dashboard = () => {
           icon={Smartphone}
           loading={stats.devices.loading}
           trend="up"
-          trendValue="8"
+          trendValue="0"
           color="green"
         />
         <StatCard
@@ -323,7 +323,7 @@ const Dashboard = () => {
           icon={Radio}
           loading={stats.channels.loading}
           trend="up"
-          trendValue="15"
+          trendValue="0"
           color="purple"
         />
         <StatCard
@@ -387,12 +387,12 @@ const Dashboard = () => {
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center p-4 bg-gray-50 rounded-lg">
               <Wifi className="w-8 h-8 text-green-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">3</p>
+              <p className="text-2xl font-bold text-gray-900">0</p>
               <p className="text-sm text-gray-600">Online Devices</p>
             </div>
             <div className="text-center p-4 bg-gray-50 rounded-lg">
               <Battery className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">85%</p>
+              <p className="text-2xl font-bold text-gray-900">0%</p>
               <p className="text-sm text-gray-600">Avg Battery</p>
             </div>
           </div>

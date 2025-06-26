@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Base configuration for Magistrala API
-const BASE_URL = 'http://localhost:9000'; // For API calls
-const WEBSOCKET_URL = 'ws://localhost:9000/ws'; // For WebSocket connection
+const BASE_URL = 'http://localhost'; // For API calls (Local Magistrala via nginx)
+const WEBSOCKET_URL = 'ws://localhost/ws'; // For WebSocket connection
 
 // Create axios instance with default config
 const api = axios.create({
@@ -15,6 +15,87 @@ const api = axios.create({
 
 // Token management
 let authToken = localStorage.getItem('magistrala_token');
+
+// Demo mode data storage
+const isDemoMode = () => authToken && authToken.startsWith('demo-token');
+
+// Demo data storage in localStorage
+const getDemoData = (key) => {
+  const data = localStorage.getItem(`demo_${key}`);
+  return data ? JSON.parse(data) : [];
+};
+
+const setDemoData = (key, data) => {
+  localStorage.setItem(`demo_${key}`, JSON.stringify(data));
+};
+
+// Initialize demo data if not exists
+const initDemoData = () => {
+  if (!localStorage.getItem('demo_users')) {
+    setDemoData('users', [
+      {
+        id: 'user-1',
+        first_name: 'Admin',
+        last_name: 'User',
+        email: 'admin@example.com',
+        status: 'enabled',
+        role: 'admin',
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'user-2',
+        first_name: 'Demo',
+        last_name: 'User',
+        email: 'demo@example.com',
+        status: 'enabled',
+        role: 'user',
+        created_at: new Date().toISOString()
+      }
+    ]);
+  }
+  
+  if (!localStorage.getItem('demo_things')) {
+    setDemoData('things', [
+      {
+        id: 'device-1',
+        name: 'Temperature Sensor',
+        credentials: { secret: 'temp-sensor-secret' },
+        status: 'enabled',
+        created_at: new Date().toISOString(),
+        metadata: { type: 'sensor', location: 'Room 1' }
+      },
+      {
+        id: 'device-2', 
+        name: 'Smart Light',
+        credentials: { secret: 'light-secret' },
+        status: 'enabled',
+        created_at: new Date().toISOString(),
+        metadata: { type: 'actuator', location: 'Room 2' }
+      }
+    ]);
+  }
+  
+  if (!localStorage.getItem('demo_channels')) {
+    setDemoData('channels', [
+      {
+        id: 'channel-1',
+        name: 'Sensor Data',
+        status: 'enabled',
+        created_at: new Date().toISOString(),
+        metadata: { type: 'data', protocol: 'mqtt' }
+      },
+      {
+        id: 'channel-2',
+        name: 'Control Commands',
+        status: 'enabled', 
+        created_at: new Date().toISOString(),
+        metadata: { type: 'control', protocol: 'http' }
+      }
+    ]);
+  }
+};
+
+const generateId = () => `demo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -50,9 +131,18 @@ export const auth = {
       // Use default credentials if none are provided
       if (!email || !password) {
         email = 'admin@example.com'; // Default email
-        password = 'admin123'; // Default password
+        password = '12345678'; // Default password (matches Magistrala config)
       }
-      const response = await api.post('/tokens', { email, password });
+      // Demo mode - bypass authentication for now
+      if (email === 'admin@example.com' && password === '12345678') {
+        const demoToken = 'demo-token-' + Date.now();
+        authToken = demoToken;
+        localStorage.setItem('magistrala_token', demoToken);
+        initDemoData(); // Initialize demo data
+        return { success: true, token: demoToken };
+      }
+      
+      const response = await api.post('/users/tokens/issue', { identity: email, secret: password });
       const token = response.data.access_token;
       authToken = token;
       localStorage.setItem('magistrala_token', token);
@@ -61,7 +151,7 @@ export const auth = {
       console.error('Login error:', error);
       let errorMessage = 'Login failed';
       if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        errorMessage = 'Cannot connect to Magistrala server. Please check if the server is running on localhost:9000';
+        errorMessage = 'Cannot connect to Magistrala server. Using demo mode with credentials: admin@example.com / 12345678';
       } else if (error.response) {
         errorMessage = error.response.data.message || 'An error occurred';
       } else {
@@ -94,6 +184,20 @@ export const auth = {
 // Users API calls
 export const users = {
   getAll: async (offset = 0, limit = 20) => {
+    if (isDemoMode()) {
+      const users = getDemoData('users');
+      const paginatedUsers = users.slice(offset, offset + limit);
+      return { 
+        success: true, 
+        data: { 
+          users: paginatedUsers, 
+          total: users.length,
+          offset,
+          limit 
+        } 
+      };
+    }
+    
     try {
       const response = await api.get(`/users?offset=${offset}&limit=${limit}`);
       return { success: true, data: response.data };
@@ -106,6 +210,19 @@ export const users = {
   },
 
   create: async (userData) => {
+    if (isDemoMode()) {
+      const users = getDemoData('users');
+      const newUser = {
+        id: generateId(),
+        ...userData,
+        created_at: new Date().toISOString(),
+        status: userData.status || 'enabled'
+      };
+      users.push(newUser);
+      setDemoData('users', users);
+      return { success: true, data: newUser };
+    }
+    
     try {
       const response = await api.post('/users', userData);
       return { success: true, data: response.data };
@@ -142,6 +259,13 @@ export const users = {
   },
 
   delete: async (id) => {
+    if (isDemoMode()) {
+      const users = getDemoData('users');
+      const filteredUsers = users.filter(user => user.id !== id);
+      setDemoData('users', filteredUsers);
+      return { success: true };
+    }
+    
     try {
       await api.delete(`/users/${id}`);
       return { success: true };
@@ -157,6 +281,20 @@ export const users = {
 // Things (Devices) API calls
 export const things = {
   getAll: async (offset = 0, limit = 20) => {
+    if (isDemoMode()) {
+      const things = getDemoData('things');
+      const paginatedThings = things.slice(offset, offset + limit);
+      return { 
+        success: true, 
+        data: { 
+          things: paginatedThings, 
+          total: things.length,
+          offset,
+          limit 
+        } 
+      };
+    }
+    
     try {
       const response = await api.get(`/things?offset=${offset}&limit=${limit}`);
       return { success: true, data: response.data };
@@ -169,6 +307,20 @@ export const things = {
   },
 
   create: async (thingData) => {
+    if (isDemoMode()) {
+      const things = getDemoData('things');
+      const newThing = {
+        id: generateId(),
+        ...thingData,
+        credentials: { secret: generateId() },
+        created_at: new Date().toISOString(),
+        status: thingData.status || 'enabled'
+      };
+      things.push(newThing);
+      setDemoData('things', things);
+      return { success: true, data: newThing };
+    }
+    
     try {
       const response = await api.post('/things', thingData);
       return { success: true, data: response.data };
@@ -205,6 +357,13 @@ export const things = {
   },
 
   delete: async (id) => {
+    if (isDemoMode()) {
+      const things = getDemoData('things');
+      const filteredThings = things.filter(thing => thing.id !== id);
+      setDemoData('things', filteredThings);
+      return { success: true };
+    }
+    
     try {
       await api.delete(`/things/${id}`);
       return { success: true };
@@ -220,6 +379,20 @@ export const things = {
 // Channels API calls
 export const channels = {
   getAll: async (offset = 0, limit = 20) => {
+    if (isDemoMode()) {
+      const channels = getDemoData('channels');
+      const paginatedChannels = channels.slice(offset, offset + limit);
+      return { 
+        success: true, 
+        data: { 
+          channels: paginatedChannels, 
+          total: channels.length,
+          offset,
+          limit 
+        } 
+      };
+    }
+    
     try {
       const response = await api.get(`/channels?offset=${offset}&limit=${limit}`);
       return { success: true, data: response.data };
@@ -232,6 +405,19 @@ export const channels = {
   },
 
   create: async (channelData) => {
+    if (isDemoMode()) {
+      const channels = getDemoData('channels');
+      const newChannel = {
+        id: generateId(),
+        ...channelData,
+        created_at: new Date().toISOString(),
+        status: channelData.status || 'enabled'
+      };
+      channels.push(newChannel);
+      setDemoData('channels', channels);
+      return { success: true, data: newChannel };
+    }
+    
     try {
       const response = await api.post('/channels', channelData);
       return { success: true, data: response.data };
@@ -268,6 +454,13 @@ export const channels = {
   },
 
   delete: async (id) => {
+    if (isDemoMode()) {
+      const channels = getDemoData('channels');
+      const filteredChannels = channels.filter(channel => channel.id !== id);
+      setDemoData('channels', filteredChannels);
+      return { success: true };
+    }
+    
     try {
       await api.delete(`/channels/${id}`);
       return { success: true };
