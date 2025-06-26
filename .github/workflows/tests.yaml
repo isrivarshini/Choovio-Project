@@ -1,0 +1,194 @@
+# Copyright (c) Abstract Machines
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-build: # Linting and building are combined to save time for setting up Go
+    name: Lint and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+          cache-dependency-path: "go.sum"
+
+      - name: Fetch SuperMQ
+        run: |
+          make fetch_supermq
+          if [[ -n $(git status --porcelain docker/supermq-docker) ]]; then
+            echo "SuperMQ docker file is not up to date. Please update it"
+            git diff docker/supermq-docker
+            exit 1
+          else
+            exit 0
+          fi
+
+      - name: Build all Binaries
+        run: |
+          make all -j $(nproc)
+
+      - name: Run linters
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1.6
+          args: --config ./tools/config/.golangci.yaml
+
+  run-tests:
+    name: Run tests
+    runs-on: ubuntu-latest
+    needs: lint-and-build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.x
+          cache-dependency-path: "go.sum"
+
+      - name: Check for changes in specific paths
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          base: main
+          filters: |
+            workflow:
+              - ".github/workflows/tests.yaml"
+
+            bootstrap:
+              - "bootstrap/**"
+              - "cmd/bootstrap/**"
+              - "auth.pb.go"
+              - "auth_grpc.pb.go"
+              - "auth/**"
+              - "pkg/sdk/**"
+              - "pkg/events/**"
+
+            cli:
+              - "cli/**"
+              - "cmd/cli/**"
+              - "pkg/sdk/**"
+
+            consumers:
+              - "consumers/**"
+              - "cmd/postgres-writer/**"
+              - "cmd/timescale-writer/**"
+              - "cmd/smpp-notifier/**"
+              - "cmd/smtp-notifier/**"
+
+            internal:
+              - "internal/**"
+
+            pkg-errors:
+              - "pkg/errors/**"
+
+            pkg-events:
+              - "pkg/events/**"
+              - "pkg/messaging/**"
+
+            pkg-sdk:
+              - "pkg/sdk/**"
+              - "bootstrap/api/**"
+              - "consumers/notifiers/api/**"
+
+            provision:
+              - "provision/**"
+              - "cmd/provision/**"
+              - "logger/**"
+              - "pkg/sdk/**"
+
+            readers:
+              - "readers/**"
+              - "cmd/postgres-reader/**"
+              - "cmd/timescale-reader/**"
+              - "auth.pb.go"
+              - "auth_grpc.pb.go"
+              - "things/**"
+              - "auth/**"
+
+            re:
+              - "re/**"
+              - "cmd/re/**"
+              - "re/api/**"
+
+            alarms:
+              - "alarms/**"
+              - "cmd/alarms/**"
+
+
+      - name: Create coverage directory
+        run: |
+          mkdir coverage
+
+      - name: Run bootstrap tests
+        if: steps.changes.outputs.bootstrap == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/bootstrap.out ./bootstrap/...
+
+      - name: Run cli tests
+        if: steps.changes.outputs.cli == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/cli.out ./cli/...
+
+      - name: Run consumers tests
+        if: steps.changes.outputs.consumers == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/consumers.out ./consumers/...
+
+      - name: Run internal tests
+        if: steps.changes.outputs.internal == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/internal.out ./internal/...
+
+      - name: Run pkg errors tests
+        if: steps.changes.outputs.pkg-errors == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/pkg-errors.out ./pkg/errors/...
+
+      - name: Run pkg sdk tests
+        if: steps.changes.outputs.pkg-sdk == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/pkg-sdk.out ./pkg/sdk/...
+
+      - name: Run provision tests
+        if: steps.changes.outputs.provision == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/provision.out ./provision/...
+
+      - name: Run readers tests
+        if: steps.changes.outputs.readers == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/readers.out ./readers/...
+
+      - name: Run rule engine tests
+        if: steps.changes.outputs.re == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/re.out ./re/...
+
+      - name: Run alarms tests
+        if: steps.changes.outputs.alarms == 'true' || steps.changes.outputs.workflow == 'true'
+        run: |
+          go test --race -v -count=1 -coverprofile=coverage/alarms.out ./alarms/...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV }}
+          files: ./coverage/*.out
+          codecov_yml_path: tools/.codecov.yaml
+          verbose: true
