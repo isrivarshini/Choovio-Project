@@ -15,4 +15,7 @@
 
 ## Demo Credentials
 - Email: admin@example.com
-- Password: 12345678 
+- Password: 12345678
+
+- ## Refer to PILOT_PROJECT_README.md
+- for detailed information of this project! 
