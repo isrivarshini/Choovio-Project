@@ -571,7 +571,6 @@ This report demonstrates not only the technical achievements but also the profes
 
 **Project Completed**: June 2024  
 **Report Generated**: June 26, 2024  
-**Total Development Time**: ~72 hours  
 **Technologies Mastered**: React, TypeScript, Go, Docker, AWS, Terraform  
 **Repository**: https://github.com/isrivarshini/Choovio-Project  
 
