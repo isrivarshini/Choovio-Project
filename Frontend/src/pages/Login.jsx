@@ -8,7 +8,7 @@ import Toast from '../components/Toast';
 const Login = () => {
   const [formData, setFormData] = useState({
     email: 'admin@example.com', // Pre-filled for demo
-    password: 'admin123'
+    password: '12345678'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,7 +40,8 @@ const Login = () => {
       
       if (result.success) {
         if (result.token.startsWith('demo-token')) {
-          showInfo('Logged in with demo credentials - using mock data');
+          const userInfo = result.user ? `${result.user.first_name} ${result.user.last_name} (${result.user.role})` : 'Demo User';
+          showInfo(`Demo mode login successful - Welcome ${userInfo}!`);
         }
         navigate('/dashboard');
       } else {
@@ -71,7 +72,7 @@ const Login = () => {
               />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-            <p className="text-gray-600">Sign in to your Choovio's Admin account</p>
+            <p className="text-gray-600">Sign in to your Choovio Admin Dashboard</p>
           </div>
 
           {/* Connection Info */}
@@ -150,15 +151,14 @@ const Login = () => {
             </button>
           </form>
 
-          {/* Demo Info */}
+          {/* Admin Credentials */}
           <div className="mt-8 p-4 bg-gray-50 rounded-xl">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Demo Credentials</h3>
-            <div className="text-xs text-gray-600 space-y-1">
-              <p><strong>Email:</strong> admin@example.com</p>
-              <p><strong>Password:</strong> 12345678</p>
-              <div className="mt-2 p-2 bg-blue-100 border border-blue-300 rounded text-blue-800 text-sm">
-                <p><strong>🎯 Demo Mode:</strong> This platform runs in demo mode with local data storage. All changes are saved locally and will persist between sessions.</p>
-              </div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Admin Credentials</h3>
+            <div className="bg-green-50 p-3 rounded border border-green-200">
+              <p className="text-sm"><strong>👤 Admin Account:</strong></p>
+              <p className="text-sm"><strong>Email:</strong> admin@example.com</p>
+              <p className="text-sm"><strong>Password:</strong> 12345678</p>
+              <p className="text-sm"><strong>Role:</strong> Admin (Full access)</p>
             </div>
           </div>
 

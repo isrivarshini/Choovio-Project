@@ -38,6 +38,7 @@ const initDemoData = () => {
         first_name: 'Admin',
         last_name: 'User',
         email: 'admin@example.com',
+        password: '12345678', // Store password for demo authentication
         status: 'enabled',
         role: 'admin',
         created_at: new Date().toISOString()
@@ -47,6 +48,7 @@ const initDemoData = () => {
         first_name: 'Demo',
         last_name: 'User',
         email: 'demo@example.com',
+        password: 'demopass', // Default password for demo user
         status: 'enabled',
         role: 'user',
         created_at: new Date().toISOString()
@@ -97,6 +99,9 @@ const initDemoData = () => {
 
 const generateId = () => `demo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+// Initialize demo data when the module loads
+initDemoData();
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
@@ -133,15 +138,30 @@ export const auth = {
         email = 'admin@example.com'; // Default email
         password = '12345678'; // Default password (matches Magistrala config)
       }
-      // Demo mode - bypass authentication for now
-      if (email === 'admin@example.com' && password === '12345678') {
+      
+      // Initialize demo data first to ensure users exist
+      initDemoData();
+      
+      // Check if this is a demo mode login (check against stored demo users)
+      const demoUsers = getDemoData('users');
+      const demoUser = demoUsers.find(user => 
+        user.email === email && user.password === password
+      );
+      
+      if (demoUser) {
         const demoToken = 'demo-token-' + Date.now();
         authToken = demoToken;
         localStorage.setItem('magistrala_token', demoToken);
-        initDemoData(); // Initialize demo data
-        return { success: true, token: demoToken };
+        localStorage.setItem('current_user', JSON.stringify(demoUser)); // Store current user info
+        return { 
+          success: true, 
+          token: demoToken,
+          user: demoUser,
+          mode: 'demo'
+        };
       }
       
+      // Try real backend authentication
       const response = await api.post('/users/tokens/issue', { identity: email, secret: password });
       const token = response.data.access_token;
       authToken = token;
@@ -149,11 +169,32 @@ export const auth = {
       return { success: true, token };
     } catch (error) {
       console.error('Login error:', error);
+      
+      // If backend fails, check if this user exists in demo data
+      const demoUsers = getDemoData('users');
+      const demoUser = demoUsers.find(user => 
+        user.email === email && user.password === password
+      );
+      
+      if (demoUser) {
+        const demoToken = 'demo-token-' + Date.now();
+        authToken = demoToken;
+        localStorage.setItem('magistrala_token', demoToken);
+        localStorage.setItem('current_user', JSON.stringify(demoUser));
+        return { 
+          success: true, 
+          token: demoToken,
+          user: demoUser,
+          mode: 'demo'
+        };
+      }
+      
+      // If no demo user found either, return error
       let errorMessage = 'Login failed';
-      if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        errorMessage = 'Cannot connect to Magistrala server. Using demo mode with credentials: admin@example.com / 12345678';
+      if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || error.name === 'AxiosError') {
+        errorMessage = 'Cannot connect to Magistrala server. Please use demo credentials or check your network connection.';
       } else if (error.response) {
-        errorMessage = error.response.data.message || 'An error occurred';
+        errorMessage = error.response.data.message || 'Invalid credentials';
       } else {
         errorMessage = error.message || 'An unknown error occurred';
       }
@@ -172,13 +213,30 @@ export const auth = {
   logout: () => {
     authToken = null;
     localStorage.removeItem('magistrala_token');
+    localStorage.removeItem('current_user'); // Clear current user info
   },
 
   isAuthenticated: () => {
-    return !!authToken;
+    // Check both the variable and localStorage
+    const token = authToken || localStorage.getItem('magistrala_token');
+    if (token && !authToken) {
+      authToken = token; // Update the variable if it's missing
+    }
+    return !!token;
   },
 
-  getToken: () => authToken
+  getToken: () => authToken,
+
+  getCurrentUser: () => {
+    const userStr = localStorage.getItem('current_user');
+    return userStr ? JSON.parse(userStr) : null;
+  },
+
+  // Check if current user has admin privileges
+  isAdmin: () => {
+    const user = auth.getCurrentUser();
+    return user && user.role === 'admin';
+  }
 };
 
 // Users API calls
@@ -212,11 +270,23 @@ export const users = {
   create: async (userData) => {
     if (isDemoMode()) {
       const users = getDemoData('users');
+      
+      // Check if user with this email already exists
+      const existingUser = users.find(user => user.email === userData.email);
+      if (existingUser) {
+        return { 
+          success: false, 
+          error: 'User with this email already exists' 
+        };
+      }
+      
       const newUser = {
         id: generateId(),
         ...userData,
+        password: userData.password || 'defaultpass', // Default password if not provided
         created_at: new Date().toISOString(),
-        status: userData.status || 'enabled'
+        status: userData.status || 'enabled',
+        role: userData.role || 'user' // Default role
       };
       users.push(newUser);
       setDemoData('users', users);

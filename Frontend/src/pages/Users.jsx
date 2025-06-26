@@ -13,9 +13,11 @@ const Users = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     password: '',
+    role: 'user',
     metadata: {}
   });
   const [formLoading, setFormLoading] = useState(false);
@@ -36,7 +38,7 @@ const Users = () => {
       }
     } catch (error) {
       showError('An error occurred while fetching users');
-    } finally {
+        } finally {
       setLoading(false);
     }
   };
@@ -44,9 +46,11 @@ const Users = () => {
   const handleAddUser = () => {
     setEditingUser(null);
     setFormData({
-      name: '',
+      first_name: '',
+      last_name: '',
       email: '',
       password: '',
+      role: 'user',
       metadata: {}
     });
     setIsModalOpen(true);
@@ -55,9 +59,11 @@ const Users = () => {
   const handleEditUser = (user) => {
     setEditingUser(user);
     setFormData({
-      name: user.name || '',
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
       email: user.email || '',
       password: '',
+      role: user.role || 'user',
       metadata: user.metadata || {}
     });
     setIsModalOpen(true);
@@ -115,7 +121,7 @@ const Users = () => {
   };
 
   const filteredUsers = usersList.filter(user =>
-    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    `${user.first_name || ''} ${user.last_name || ''}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -126,8 +132,8 @@ const Users = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Users Management</h1>
-          <p className="text-gray-600 mt-1">Manage user accounts and permissions</p>
+          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+          <p className="text-gray-600 mt-1">Manage user accounts and access permissions</p>
         </div>
         <button
           onClick={handleAddUser}
@@ -171,12 +177,9 @@ const Users = () => {
               {searchTerm ? 'No users match your search criteria.' : 'Get started by adding your first user.'}
             </p>
             {!searchTerm && (
-              <button
-                onClick={handleAddUser}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Add User
-              </button>
+              <p className="text-sm text-gray-500 mt-2">
+                This is an admin dashboard for monitoring users
+              </p>
             )}
           </div>
         ) : (
@@ -211,9 +214,12 @@ const Users = () => {
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {user.name || 'Unnamed User'}
+                            {`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unnamed User'}
                           </div>
-                          <div className="text-xs text-gray-500">ID: {user.id}</div>
+                          <div className="text-xs text-gray-500">
+                            {user.role && <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full mr-2">{user.role}</span>}
+                            ID: {user.id}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -240,14 +246,14 @@ const Users = () => {
                       <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={() => handleEditUser(user)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="text-blue-600 hover:text-blue-800 p-1"
                           title="Edit user"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="text-red-600 hover:text-red-800 p-1"
                           title="Delete user"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -262,81 +268,106 @@ const Users = () => {
         )}
       </div>
 
-      {/* Add/Edit User Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingUser ? 'Edit User' : 'Add New User'}
-        size="medium"
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-              Full Name
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter full name"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter email address"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              {editingUser ? 'New Password (leave blank to keep current)' : 'Password'}
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleInputChange}
-              required={!editingUser}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter password"
-            />
-          </div>
-
-          <div className="flex items-center justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={formLoading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
-            >
-              {formLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
-              <span>{editingUser ? 'Update User' : 'Create User'}</span>
-            </button>
-          </div>
-        </form>
+      {/* User Modal */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            {editingUser ? 'Edit User' : 'Add New User'}
+          </h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  First Name
+                </label>
+                <input
+                  type="text"
+                  name="first_name"
+                  value={formData.first_name}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  name="last_name"
+                  value={formData.last_name}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Password {editingUser && '(leave blank to keep current)'}
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required={!editingUser}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Role
+              </label>
+              <select
+                name="role"
+                value={formData.role}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={formLoading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {formLoading ? (editingUser ? 'Updating...' : 'Creating...') : (editingUser ? 'Update User' : 'Create User')}
+              </button>
+            </div>
+          </form>
+        </div>
       </Modal>
+
     </div>
   );
 };
