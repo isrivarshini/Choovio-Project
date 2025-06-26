@@ -1,20 +1,17 @@
 #!/bin/bash
 
-# Choovio IoT Platform - EC2 User Data Script
-# This script automatically sets up the platform on new EC2 instances
+# Choovio IoT Platform - FREE TIER EC2 User Data Script
+# Optimized for minimal cost deployment
 
 set -e
 
 # Variables from Terraform
-DB_HOST="${db_host}"
-DB_NAME="${db_name}"
-DB_USERNAME="${db_username}"
-DB_PASSWORD="${db_password}"
+PROJECT_NAME="${project_name}"
 AWS_REGION="${aws_region}"
 
 # Logging
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-echo "Starting Choovio IoT Platform deployment at $(date)"
+echo "Starting Choovio IoT Platform FREE TIER deployment at $(date)"
 
 # Update system
 yum update -y
@@ -27,7 +24,10 @@ yum install -y \
     wget \
     unzip \
     htop \
-    nginx
+    nginx \
+    sqlite \
+    postgresql \
+    postgresql-server
 
 # Install Docker Compose
 curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -52,36 +52,54 @@ export PATH=$PATH:/usr/local/go/bin
 mkdir -p /opt/choovio
 cd /opt/choovio
 
-# Clone the repository (replace with your actual repository URL)
+# Clone the repository
 git clone https://github.com/isrivarshini/Choovio-Project.git .
 cd /opt/choovio
 
-# Set up environment variables
+# Set up local PostgreSQL (FREE - no RDS charges)
+postgresql-setup initdb
+systemctl enable postgresql
+systemctl start postgresql
+
+# Create database and user
+sudo -u postgres psql << EOF
+CREATE DATABASE magistrala;
+CREATE USER magistrala WITH PASSWORD 'magistrala123!';
+GRANT ALL PRIVILEGES ON DATABASE magistrala TO magistrala;
+\q
+EOF
+
+# Set up environment variables for local deployment
 cat > /opt/choovio/.env << EOF
-# Database Configuration
-DB_HOST=${DB_HOST}
+# Local Database Configuration (FREE)
+DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=${DB_NAME}
-DB_USERNAME=${DB_USERNAME}
-DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=magistrala
+DB_USERNAME=magistrala
+DB_PASSWORD=magistrala123!
 
 # Application Configuration
-APP_ENV=production
-AWS_REGION=${AWS_REGION}
+APP_ENV=development
+AWS_REGION=${aws_region}
+PROJECT_NAME=${project_name}
 
-# Magistrala Configuration
-MG_DB_HOST=${DB_HOST}
+# Magistrala Configuration - Local
+MG_DB_HOST=localhost
 MG_DB_PORT=5432
-MG_DB_USER=${DB_USERNAME}
-MG_DB_PASS=${DB_PASSWORD}
-MG_DB_NAME=${DB_NAME}
+MG_DB_USER=magistrala
+MG_DB_PASS=magistrala123!
+MG_DB_NAME=magistrala
 
 # API Configuration
 API_BASE_URL=http://localhost:9000
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:80
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS=*
+
+# Free Tier Optimizations
+DEPLOYMENT_TYPE=free_tier
+USE_LOCAL_DB=true
 EOF
 
 # Build and start backend services
@@ -96,7 +114,7 @@ cd /opt/choovio/backend
 cat > /etc/systemd/system/choovio-backend.service << EOF
 [Unit]
 Description=Choovio IoT Backend API
-After=network.target
+After=network.target postgresql.service
 
 [Service]
 Type=simple
@@ -116,92 +134,132 @@ EOF
 echo "Setting up frontend..."
 cd /opt/choovio/Frontend
 
+# Update frontend API configuration for production
+cat > /opt/choovio/Frontend/.env.production << EOF
+VITE_API_BASE_URL=http://\$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9000
+VITE_DEPLOYMENT_TYPE=free_tier
+EOF
+
 # Install dependencies and build
 npm install
 npm run build
 
 # Configure Nginx for frontend
-cat > /etc/nginx/conf.d/choovio.conf << EOF
-server {
-    listen 5173;
-    server_name _;
-    root /opt/choovio/Frontend/dist;
-    index index.html;
+cat > /etc/nginx/nginx.conf << EOF
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
 
-    location / {
-        try_files \$uri \$uri/ /index.html;
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                      '\$status \$body_bytes_sent "\$http_referer" '
+                      '"\$http_user_agent" "\$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 2048;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    # Frontend server
+    server {
+        listen 80 default_server;
+        server_name _;
+        root /opt/choovio/Frontend/dist;
+        index index.html;
+
+        # Frontend routing
+        location / {
+            try_files \$uri \$uri/ /index.html;
+        }
+
+        # API proxy
+        location /api/ {
+            proxy_pass http://localhost:9000/;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        # Direct backend access
+        location /health {
+            proxy_pass http://localhost:9000/health;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+        }
+
+        # Static assets
+        location /assets/ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
     }
 
-    location /api/ {
-        proxy_pass http://localhost:9000/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-
-    location /health {
-        proxy_pass http://localhost:9000/health;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
+    # Backend direct access (for development)
+    server {
+        listen 9000;
+        server_name _;
+        
+        location / {
+            proxy_pass http://localhost:9001;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+        }
     }
 }
 EOF
 
-# Remove default Nginx configuration
-rm -f /etc/nginx/conf.d/default.conf
-
-# Set up Docker Compose for Magistrala core services
+# Set up minimal Docker services (only essential ones for free tier)
 cd /opt/choovio
-cat > docker-compose.override.yml << EOF
+cat > docker-compose.free-tier.yml << EOF
 version: '3.8'
 
 services:
-  postgres:
-    environment:
-      POSTGRES_HOST: ${DB_HOST}
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    
+  # Redis for caching (lightweight)
   redis:
-    restart: always
-    
-  nats:
-    restart: always
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
 
-  things:
-    environment:
-      MG_THINGS_DB_HOST: ${DB_HOST}
-      MG_THINGS_DB_PORT: 5432
-      MG_THINGS_DB_USER: ${DB_USERNAME}
-      MG_THINGS_DB_PASS: ${DB_PASSWORD}
-      MG_THINGS_DB_NAME: ${DB_NAME}
-    
-  users:
-    environment:
-      MG_USERS_DB_HOST: ${DB_HOST}
-      MG_USERS_DB_PORT: 5432
-      MG_USERS_DB_USER: ${DB_USERNAME}
-      MG_USERS_DB_PASS: ${DB_PASSWORD}
-      MG_USERS_DB_NAME: ${DB_NAME}
+  # NATS for messaging (lightweight)
+  nats:
+    image: nats:2-alpine
+    restart: unless-stopped
+    ports:
+      - "4222:4222"
+    command: 
+      - "-js"
+      - "-m"
+      - "8222"
+
+volumes:
+  redis_data:
 EOF
 
-# Wait for database to be ready
-echo "Waiting for database to be ready..."
-while ! nc -z ${DB_HOST} 5432; do
+# Wait for PostgreSQL to be ready
+echo "Waiting for PostgreSQL to be ready..."
+while ! nc -z localhost 5432; do
   echo "Waiting for PostgreSQL to start..."
   sleep 5
 done
 
-# Start core Magistrala services
-cd /opt/choovio/docker
-docker-compose up -d postgres redis nats
-
-# Start Magistrala services
-sleep 30  # Wait for dependencies
-docker-compose up -d users things http-adapter
+# Start minimal Docker services
+docker-compose -f docker-compose.free-tier.yml up -d
 
 # Set permissions
 chown -R ec2-user:ec2-user /opt/choovio
@@ -217,74 +275,112 @@ systemctl start nginx
 # Create health check script
 cat > /opt/choovio/health-check.sh << 'EOF'
 #!/bin/bash
-# Health check script for monitoring services
+# Health check script for FREE TIER deployment
 
-echo "=== Choovio IoT Platform Health Check ==="
+echo "=== Choovio IoT Platform Health Check (Free Tier) ==="
 echo "Timestamp: $(date)"
 
-echo "1. Backend API Status:"
-curl -s http://localhost:9000/health || echo "Backend API is DOWN"
+echo "1. Frontend Status:"
+curl -s http://localhost > /dev/null && echo "✅ Frontend is UP" || echo "❌ Frontend is DOWN"
 
-echo "2. Frontend Status:"
-curl -s http://localhost:5173 > /dev/null && echo "Frontend is UP" || echo "Frontend is DOWN"
+echo "2. Backend API Status:"
+curl -s http://localhost:9000/health > /dev/null && echo "✅ Backend API is UP" || echo "❌ Backend API is DOWN"
 
-echo "3. Docker Services:"
-docker-compose -f /opt/choovio/docker/docker-compose.yml ps
+echo "3. Database Status:"
+sudo -u postgres psql -d magistrala -c "SELECT 1;" > /dev/null 2>&1 && echo "✅ Database is UP" || echo "❌ Database is DOWN"
 
-echo "4. System Resources:"
-free -h
-df -h /
+echo "4. Docker Services:"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+echo "5. System Resources:"
+echo "Memory: $(free -h | grep Mem | awk '{print $3"/"$2}')"
+echo "Disk: $(df -h / | tail -1 | awk '{print $3"/"$2" ("$5" used)"}')"
+echo "CPU Load: $(uptime | awk -F'load average:' '{print $2}')"
+
+echo "6. Public Access:"
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+echo "🌐 Frontend URL: http://$PUBLIC_IP"
+echo "🔧 Backend API: http://$PUBLIC_IP:9000"
 
 echo "=== End Health Check ==="
 EOF
 
 chmod +x /opt/choovio/health-check.sh
 
-# Set up log rotation
-cat > /etc/logrotate.d/choovio << EOF
-/var/log/choovio/*.log {
-    daily
-    missingok
-    rotate 14
-    compress
-    notifempty
-    create 0644 ec2-user ec2-user
-    postrotate
-        systemctl reload choovio-backend
-    endscript
-}
+# Create startup script for easy management
+cat > /opt/choovio/manage.sh << 'EOF'
+#!/bin/bash
+# Management script for Choovio IoT Platform
+
+case "$1" in
+    start)
+        echo "Starting Choovio services..."
+        systemctl start postgresql choovio-backend nginx
+        docker-compose -f /opt/choovio/docker-compose.free-tier.yml up -d
+        echo "Services started!"
+        ;;
+    stop)
+        echo "Stopping Choovio services..."
+        systemctl stop choovio-backend nginx
+        docker-compose -f /opt/choovio/docker-compose.free-tier.yml down
+        echo "Services stopped!"
+        ;;
+    restart)
+        $0 stop
+        sleep 5
+        $0 start
+        ;;
+    status)
+        /opt/choovio/health-check.sh
+        ;;
+    logs)
+        echo "=== Backend Logs ==="
+        journalctl -u choovio-backend -n 50
+        echo "=== Nginx Logs ==="
+        tail -n 20 /var/log/nginx/error.log
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status|logs}"
+        exit 1
+        ;;
+esac
 EOF
 
-# Create CloudWatch agent configuration (optional)
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
-{
-    "logs": {
-        "logs_collected": {
-            "files": {
-                "collect_list": [
-                    {
-                        "file_path": "/var/log/user-data.log",
-                        "log_group_name": "choovio-iot/user-data",
-                        "log_stream_name": "{instance_id}"
-                    },
-                    {
-                        "file_path": "/var/log/choovio/*.log",
-                        "log_group_name": "choovio-iot/application",
-                        "log_stream_name": "{instance_id}"
-                    }
-                ]
-            }
-        }
-    }
-}
-EOF
+chmod +x /opt/choovio/manage.sh
 
-# Final status check
+# Final setup and verification
+echo "Performing final setup..."
+sleep 30  # Wait for services to stabilize
+
+# Update frontend build with correct API URL
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+echo "VITE_API_BASE_URL=http://$PUBLIC_IP:9000" > /opt/choovio/Frontend/.env.production
+
+# Rebuild frontend with correct API URL
+cd /opt/choovio/Frontend
+npm run build
+
+# Restart nginx to serve updated frontend
+systemctl restart nginx
+
+# Final health check
 echo "Deployment completed at $(date)"
 echo "Running final health check..."
-sleep 60  # Wait for services to fully start
+sleep 30
 /opt/choovio/health-check.sh
 
-echo "Choovio IoT Platform deployment completed successfully!"
-echo "Frontend URL: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):5173"
-echo "Backend API: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9000" 
+echo ""
+echo "🎉 Choovio IoT Platform FREE TIER deployment completed successfully!"
+echo "📱 Frontend URL: http://$PUBLIC_IP"
+echo "🔧 Backend API: http://$PUBLIC_IP:9000"
+echo "💰 Estimated monthly cost: \$0-5 (within free tier)"
+echo ""
+echo "🔍 Management commands:"
+echo "  sudo /opt/choovio/manage.sh status  - Check system status"
+echo "  sudo /opt/choovio/manage.sh restart - Restart all services"
+echo "  sudo /opt/choovio/manage.sh logs    - View application logs"
+echo ""
+echo "🔑 Default login credentials:"
+echo "  Email: admin@example.com"
+echo "  Password: admin123"
+EOF 

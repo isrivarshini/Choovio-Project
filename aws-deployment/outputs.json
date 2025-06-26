@@ -1,0 +1,37 @@
+{
+  "backend_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "http://54.166.137.2:9000"
+  },
+  "cost_estimate": {
+    "sensitive": false,
+    "type": "string",
+    "value": "~$0-5/month (within free tier limits for first 12 months)"
+  },
+  "frontend_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "http://54.166.137.2"
+  },
+  "public_dns": {
+    "sensitive": false,
+    "type": "string",
+    "value": "ec2-54-196-188-217.compute-1.amazonaws.com"
+  },
+  "public_ip": {
+    "sensitive": false,
+    "type": "string",
+    "value": "54.166.137.2"
+  },
+  "security_note": {
+    "sensitive": false,
+    "type": "string",
+    "value": "⚠️  This is a development setup. For production, implement proper security groups, SSL certificates, and database security."
+  },
+  "ssh_command": {
+    "sensitive": false,
+    "type": "string",
+    "value": "ssh -i choovio-iot-free-key.pem ec2-user@54.166.137.2"
+  }
+}

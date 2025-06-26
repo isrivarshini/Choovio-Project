@@ -1,5 +1,5 @@
-# Choovio IoT Platform - AWS Infrastructure
-# Terraform configuration for deploying Magistrala with custom frontend
+# Choovio IoT Platform - AWS Free Tier Deployment
+# Optimized for AWS Free Tier to minimize costs
 
 terraform {
   required_version = ">= 1.0"
@@ -16,7 +16,7 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Variables
+# Variables - Free Tier Optimized
 variable "aws_region" {
   description = "AWS region"
   type        = string
@@ -26,25 +26,25 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "choovio-iot"
+  default     = "choovio-iot-free"
 }
 
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "production"
+  default     = "development"
 }
 
 variable "instance_type" {
-  description = "EC2 instance type"
+  description = "EC2 instance type - FREE TIER"
   type        = string
-  default     = "t3.medium"
+  default     = "t2.micro"  # Free tier eligible
 }
 
 variable "key_pair_name" {
   description = "AWS Key Pair name for EC2 access"
   type        = string
-  default     = "choovio-iot-key"
+  default     = "choovio-iot-free-key"
 }
 
 # Data sources
@@ -52,86 +52,33 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# VPC
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+# Get default VPC (to save costs)
+data "aws_vpc" "default" {
+  default = true
+}
 
-  tags = {
-    Name        = "${var.project_name}-vpc"
-    Environment = var.environment
-    Project     = "Choovio IoT Platform"
+# Get default subnets (to save costs)
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
   }
 }
 
-# Internet Gateway
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
+# Security Group for EC2 Instance - Simplified
+resource "aws_security_group" "web" {
+  name_prefix = "${var.project_name}-web-"
+  vpc_id      = data.aws_vpc.default.id
 
-  tags = {
-    Name        = "${var.project_name}-igw"
-    Environment = var.environment
-  }
-}
-
-# Public Subnets
-resource "aws_subnet" "public" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 1}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name        = "${var.project_name}-public-subnet-${count.index + 1}"
-    Environment = var.environment
-    Type        = "Public"
-  }
-}
-
-# Private Subnets
-resource "aws_subnet" "private" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 10}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = {
-    Name        = "${var.project_name}-private-subnet-${count.index + 1}"
-    Environment = var.environment
-    Type        = "Private"
-  }
-}
-
-# Route Table for Public Subnets
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+  # SSH access
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name        = "${var.project_name}-public-rt"
-    Environment = var.environment
-  }
-}
-
-# Associate Public Subnets with Route Table
-resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-# Security Group for Application Load Balancer
-resource "aws_security_group" "alb" {
-  name_prefix = "${var.project_name}-alb-"
-  vpc_id      = aws_vpc.main.id
-
+  # HTTP access for frontend
   ingress {
     from_port   = 80
     to_port     = 80
@@ -139,6 +86,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # HTTPS access (future)
   ingress {
     from_port   = 443
     to_port     = 443
@@ -146,62 +94,36 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name        = "${var.project_name}-alb-sg"
-    Environment = var.environment
-  }
-}
-
-# Security Group for EC2 Instances
-resource "aws_security_group" "ec2" {
-  name_prefix = "${var.project_name}-ec2-"
-  vpc_id      = aws_vpc.main.id
-
-  # SSH access
+  # Frontend dev port
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port   = 5173
+    to_port     = 5173
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Restrict this to your IP for production
-  }
-
-  # Frontend (React app)
-  ingress {
-    from_port       = 5173
-    to_port         = 5173
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Backend API
   ingress {
-    from_port       = 9000
-    to_port         = 9000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    from_port   = 9000
+    to_port     = 9000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Magistrala services
   ingress {
-    from_port       = 8080
-    to_port         = 8090
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    from_port   = 8000
+    to_port     = 8999
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Database access
+  # PostgreSQL for local access
   ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/8"]
   }
 
   egress {
@@ -212,243 +134,89 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name        = "${var.project_name}-ec2-sg"
+    Name        = "${var.project_name}-web-sg"
     Environment = var.environment
+    Tier        = "Free"
   }
 }
 
-# Security Group for RDS
-resource "aws_security_group" "rds" {
-  name_prefix = "${var.project_name}-rds-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-  }
-
-  tags = {
-    Name        = "${var.project_name}-rds-sg"
-    Environment = var.environment
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = false
-
-  tags = {
-    Name        = "${var.project_name}-alb"
-    Environment = var.environment
-  }
-}
-
-# Target Group for Frontend
-resource "aws_lb_target_group" "frontend" {
-  name     = "${var.project_name}-frontend-tg"
-  port     = 5173
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/"
-    matcher             = "200"
-  }
-
-  tags = {
-    Name        = "${var.project_name}-frontend-tg"
-    Environment = var.environment
-  }
-}
-
-# Target Group for Backend API
-resource "aws_lb_target_group" "backend" {
-  name     = "${var.project_name}-backend-tg"
-  port     = 9000
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/health"
-    matcher             = "200"
-  }
-
-  tags = {
-    Name        = "${var.project_name}-backend-tg"
-    Environment = var.environment
-  }
-}
-
-# Load Balancer Listener
-resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
-  }
-}
-
-# Load Balancer Listener Rule for API
-resource "aws_lb_listener_rule" "api" {
-  listener_arn = aws_lb_listener.main.arn
-  priority     = 100
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/*"]
-    }
-  }
-}
-
-# RDS Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
-
-  tags = {
-    Name        = "${var.project_name}-db-subnet-group"
-    Environment = var.environment
-  }
-}
-
-# RDS Instance
-resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-db"
-
-  engine         = "postgres"
-  engine_version = "15.7"
-  instance_class = "db.t3.micro"
-
-  allocated_storage     = 20
-  max_allocated_storage = 100
-  storage_encrypted     = true
-
-  db_name  = "magistrala"
-  username = "magistrala"
-  password = "magistrala123!" # Use AWS Secrets Manager in production
-
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-
-  skip_final_snapshot = true
-
-  tags = {
-    Name        = "${var.project_name}-db"
-    Environment = var.environment
-  }
-}
-
-# Launch Template for EC2 Instances
-resource "aws_launch_template" "main" {
-  name_prefix   = "${var.project_name}-"
-  description   = "Launch template for Choovio IoT Platform"
-  image_id      = "ami-0c02fb55956c7d316"  # Amazon Linux 2 AMI
+# FREE TIER: Single EC2 Instance (instead of ALB + ASG)
+resource "aws_instance" "choovio_server" {
+  ami           = "ami-0c02fb55956c7d316"  # Amazon Linux 2 AMI (Free tier eligible)
   instance_type = var.instance_type
   key_name      = var.key_pair_name
 
-  vpc_security_group_ids = [aws_security_group.ec2.id]
+  vpc_security_group_ids = [aws_security_group.web.id]
+  
+  # Use first available subnet from default VPC
+  subnet_id                   = tolist(data.aws_subnets.default.ids)[0]
+  associate_public_ip_address = true
 
+  # FREE TIER: Use local SQLite instead of RDS to save costs
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    db_host     = aws_db_instance.main.endpoint
-    db_name     = aws_db_instance.main.db_name
-    db_username = aws_db_instance.main.username
-    db_password = "magistrala123!"
-    aws_region  = var.aws_region
+    project_name = var.project_name
+    aws_region   = var.aws_region
   }))
 
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name        = "${var.project_name}-instance"
-      Environment = var.environment
-      Project     = "Choovio IoT Platform"
-    }
+  root_block_device {
+    volume_type = "gp2"
+    volume_size = 8  # Free tier allows up to 30GB, using 8GB to be conservative
+    encrypted   = false  # Encryption not included in free tier
   }
 
   tags = {
-    Name        = "${var.project_name}-launch-template"
+    Name        = "${var.project_name}-server"
     Environment = var.environment
+    Tier        = "Free"
+    Project     = "Choovio IoT Platform"
   }
 }
 
-# Auto Scaling Group
-resource "aws_autoscaling_group" "main" {
-  name                = "${var.project_name}-asg"
-  vpc_zone_identifier = aws_subnet.public[*].id
-  target_group_arns   = [aws_lb_target_group.frontend.arn, aws_lb_target_group.backend.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
+# FREE TIER: Elastic IP (one free static IP per region)
+resource "aws_eip" "choovio_ip" {
+  instance = aws_instance.choovio_server.id
+  domain   = "vpc"
 
-  min_size         = 1
-  max_size         = 3
-  desired_capacity = 1
-
-  launch_template {
-    id      = aws_launch_template.main.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-asg"
-    propagate_at_launch = false
-  }
-
-  tag {
-    key                 = "Environment"
-    value               = var.environment
-    propagate_at_launch = true
+  tags = {
+    Name        = "${var.project_name}-eip"
+    Environment = var.environment
+    Tier        = "Free"
   }
 }
 
 # Outputs
-output "alb_dns_name" {
-  description = "DNS name of the load balancer"
-  value       = aws_lb.main.dns_name
+output "public_ip" {
+  description = "Public IP of the server"
+  value       = aws_eip.choovio_ip.public_ip
 }
 
-output "alb_zone_id" {
-  description = "Zone ID of the load balancer"
-  value       = aws_lb.main.zone_id
+output "public_dns" {
+  description = "Public DNS name of the server"
+  value       = aws_instance.choovio_server.public_dns
 }
 
-output "rds_endpoint" {
-  description = "RDS instance endpoint"
-  value       = aws_db_instance.main.endpoint
-  sensitive   = true
+output "ssh_command" {
+  description = "SSH command to connect to the server"
+  value       = "ssh -i ${var.key_pair_name}.pem ec2-user@${aws_eip.choovio_ip.public_ip}"
 }
 
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.main.id
+output "frontend_url" {
+  description = "Frontend application URL"
+  value       = "http://${aws_eip.choovio_ip.public_ip}"
+}
+
+output "backend_url" {
+  description = "Backend API URL"
+  value       = "http://${aws_eip.choovio_ip.public_ip}:9000"
+}
+
+output "cost_estimate" {
+  description = "Monthly cost estimate"
+  value       = "~$0-5/month (within free tier limits for first 12 months)"
+}
+
+# Security note output
+output "security_note" {
+  description = "Security consideration"
+  value       = "⚠️  This is a development setup. For production, implement proper security groups, SSL certificates, and database security."
 } 
